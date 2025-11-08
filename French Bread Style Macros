@@ -1,0 +1,74 @@
+I made this to emulate how using A+B in French Bread games would give you a dash or airdash depending on the position. Basically, inside of the translateInputs method of ControlsScript.cs before the main loop
+
+You'll want to drop this in there
+
+        // ===== Macros (e.g., Button6 => Button5 + Button2) =====
+        bool macroB6Active = false;
+        bool b6Down = false, b6Up = false, b6Held = false;
+
+        // detect Button6 state from current/previous inputs
+        foreach (var kv in currentInputs) {
+            var ir = kv.Key; var ev = kv.Value;
+            if (ir.inputType == InputType.Button && ir.engineRelatedButton == ButtonPress.Button6) {
+                InputEvents p;
+                if (!previousInputs.TryGetValue(ir, out p)) p = InputEvents.Default;
+                b6Down = ev.button && !p.button;
+                b6Up   = !ev.button && p.button;
+                b6Held = ev.button;
+                break; // found Button6 entry
+            }
+        }
+
+        // emulate Button5 + Button2 behavior
+        if (b6Down) {
+            macroB6Active = true;
+
+            // “press” both buttons this frame
+            inputHeldDown[ButtonPress.Button5] += UFE.fixedDeltaTime;
+            inputHeldDown[ButtonPress.Button2] += UFE.fixedDeltaTime;
+
+            // try immediate move on press with the pair
+            MoveInfo m = myMoveSetScript.GetMove(
+                new ButtonPress[] { ButtonPress.Button5, ButtonPress.Button2 }, 0, currentMove, false, true);
+            if (m != null) {
+                storedMove = m;
+                storedMoveTime = ((Fix64)UFE.config.executionBufferTime / UFE.config.fps);
+                return;
+            }
+        } else if (b6Held) {
+            macroB6Active = true;
+
+            // keep both “held”
+            inputHeldDown[ButtonPress.Button5] += UFE.fixedDeltaTime;
+            inputHeldDown[ButtonPress.Button2] += UFE.fixedDeltaTime;
+        } else if (b6Up) {
+            macroB6Active = true;
+
+            // emulate release of both; use the longer of the two holds for release timing
+            Fix64 held = inputHeldDown[ButtonPress.Button5] > inputHeldDown[ButtonPress.Button2]
+                ? inputHeldDown[ButtonPress.Button5] : inputHeldDown[ButtonPress.Button2];
+
+            MoveInfo mUp = myMoveSetScript.GetMove(
+                new ButtonPress[] { ButtonPress.Button5, ButtonPress.Button2 }, held, currentMove, true);
+
+            inputHeldDown[ButtonPress.Button5] = 0;
+            inputHeldDown[ButtonPress.Button2] = 0;
+
+            if (mUp != null) {
+                storedMove = mUp;
+                storedMoveTime = ((Fix64)UFE.config.executionBufferTime / UFE.config.fps);
+                return;
+            }
+        }
+        // ===== End Macros =====
+
+And then, later into that same method, and look for the if condition
+
+        if (inputRef.inputType == InputType.Button && !UFE.config.lockInputs)
+
+And add this to the top of that block 
+
+        // prevent Button6 default handling when macro consumed it
+        if (macroB6Active && inputRef.engineRelatedButton == ButtonPress.Button6) continue;
+
+You can make this work for any button, and as a macro for any other button
