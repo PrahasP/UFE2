@@ -1,0 +1,168 @@
+Most of the tedious stuff with getting this to be possible was more about the in-engine setup, rather than the code. 
+
+Where basically, you'll want to go to your BattleGUI script, make 3 different sorting layers (BackGUI, Players, FrontGUI), and then make 2 child canvases for the BattleGUI prefab, one being on BackGUI, and another for FrontGUI, and drag the UI elements that should belong to each group into the right spot. 
+
+From there, you'll need to use Unity's newer Camera Stacking feature to make a single base camera that can see everything but those 3 layers, and have each of BackGUI, Players, and FrontGUI viewable by a single child camera each so that you can get them to render in the proper order.
+
+From there, toss this in the start or awake method for your BattleGUI.cs
+
+	public void Start()
+	{
+		var playerCamObj = GameObject.Find("Player Cam");
+		if (playerCamObj != null)
+		{
+			var cam = playerCamObj.GetComponent<Camera>();
+			if (cam != null) cam.enabled = true;
+			playerCamObj.SetActive(true);
+		}
+
+		var uiCam2Obj = GameObject.Find("UI Cam 2");
+		if (uiCam2Obj != null)
+		{
+			var cam = uiCam2Obj.GetComponent<Camera>();
+			if (cam != null) cam.enabled = true;
+			uiCam2Obj.SetActive(true);
+		}
+		// Helper method to set layer recursively
+		void SetLayerRecursively(GameObject obj, int layer)
+		{
+			if (obj == null) return;
+			obj.layer = layer;
+			foreach (Transform child in obj.transform)
+			{
+				if (child != null)
+					SetLayerRecursively(child.gameObject, layer);
+			}
+		}
+
+		// Find the CanvasGroup/Canvas in the hierarchy for the background
+		Canvas BackGUI = GameObject.Find("BackGUI")?.GetComponent<Canvas>();
+		if (BackGUI != null)
+		{
+			Debug.Log("BG Canvas found: " + BackGUI.name);
+			GameObject bgCamObj = GameObject.Find("UI Cam");
+			if (bgCamObj != null)
+			{
+				Camera bgCam = bgCamObj.GetComponent<Camera>();
+				Debug.Log("BG Camera found: " + bgCam.name);
+				if (bgCam != null)
+				{
+					BackGUI.worldCamera = bgCam.GetComponent<Camera>();
+				}
+			}
+			BackGUI.renderMode = RenderMode.ScreenSpaceCamera;
+			BackGUI.planeDistance = backGUIPlaneDistance;
+		}
+
+		// Find the CanvasGroup/Canvas in the hierarchy
+		Canvas FrontGUI = GameObject.Find("FrontGUI")?.GetComponent<Canvas>();
+		if (FrontGUI != null)
+		{
+			Debug.Log("Canvas found: " + FrontGUI.name);
+			GameObject uiCamObj = GameObject.Find("UI Cam 2");
+			if (uiCamObj != null)
+			{
+				Camera uiCam = uiCamObj.GetComponent<Camera>();
+				Debug.Log("Camera found: " + uiCam.name);
+				if (uiCam != null)
+				{
+					FrontGUI.worldCamera = uiCam.GetComponent<Camera>();
+				}
+			}
+			FrontGUI.renderMode = RenderMode.ScreenSpaceCamera;
+			FrontGUI.planeDistance = frontGUIPlaneDistance;
+		}
+
+		// Set "Player1" and "Player2" GameObjects to "Player" layer
+		int playerLayer = LayerMask.NameToLayer("Player");
+		// Find "Player1" GameObject anywhere in the hierarchy
+		GameObject player1Obj = null;
+		GameObject player2Obj = null;
+		var allObjects = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+		foreach (var obj in allObjects)
+		{
+			if (obj.name == "Player1")
+			{
+				player1Obj = obj;
+			}
+
+			if (obj.name == "Player2")
+			{
+				player2Obj = obj;
+			}
+
+			if (player1Obj != null && player2Obj != null)
+			{
+				break;
+			}
+		}
+
+		if (player1Obj != null)
+		{
+			Debug.Log("Player1 found: " + player1Obj.name);
+			SetLayerRecursively(player1Obj, playerLayer);
+		}
+		else
+		{
+			Debug.LogWarning("Player1 not found!");
+		}
+
+		if (player2Obj != null)
+		{
+			Debug.Log("Player2 found: " + player2Obj.name);
+			SetLayerRecursively(player2Obj, playerLayer);
+		}
+		else
+		{
+			Debug.LogWarning("Player2 not found!");
+		}
+
+		var canvasGroup = GameObject.Find("CanvasGroup")?.transform;
+		if (FrontGUI != null && canvasGroup != null)
+		{
+			FrontGUI.transform.SetParent(canvasGroup, false);
+			Debug.Log("FrontGUI is now a direct child of CanvasGroup.");
+		}
+
+		if (FrontGUI != null)
+		{
+			FrontGUI.renderMode = RenderMode.ScreenSpaceCamera;
+			GameObject uiCamObj = GameObject.Find("UI Cam 2");
+			if (uiCamObj != null)
+			{
+				Camera uiCam = uiCamObj.GetComponent<Camera>();
+				if (uiCam != null)
+				{
+					FrontGUI.worldCamera = uiCam;
+				}
+			}
+		}
+
+		Canvas mainCanvas = GameObject.Find("Canvas")?.GetComponent<Canvas>();
+		if (mainCanvas != null)
+		{
+			GameObject uiCamObj = GameObject.Find("UI Cam");
+			if (uiCamObj != null)
+			{
+				Camera uiCam = uiCamObj.GetComponent<Camera>();
+				if (uiCam != null)
+				{
+					mainCanvas.renderMode = RenderMode.ScreenSpaceCamera;
+					mainCanvas.worldCamera = uiCam;
+				}
+			}
+		}
+
+		int backGUILayer = LayerMask.NameToLayer("BackGUI");
+		GameObject p1InputViewer = GameObject.Find("Player 1 Input Viewer");
+		if (p1InputViewer != null)
+		{
+			SetLayerRecursively(p1InputViewer, backGUILayer);
+		}
+		GameObject p2InputViewer = GameObject.Find("Player 2 Input Viewer");
+		if (p2InputViewer != null)
+		{
+			SetLayerRecursively(p2InputViewer, backGUILayer);
+		}
+	}
+
