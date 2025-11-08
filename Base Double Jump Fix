@@ -1,0 +1,50 @@
+Base ControlsScript Double Jump fix:
+
+Inside of UFE2's 'ControlsScript.cs'Replace the lines 
+
+                // Double/Multi Jumps
+                if (inputHeldDown[engineRelatedButton] == UFE.fixedDeltaTime && !myPhysicsScript.IsGrounded() && myInfo.physics.canJump && myInfo.physics.multiJumps > 1)
+                    myPhysicsScript.Jump();
+
+With the following
+
+              // Double/Multi Jumps - allow directional input for each subsequent jump
+                if (inputHeldDown[engineRelatedButton] == UFE.fixedDeltaTime
+                    && !myPhysicsScript.IsGrounded()
+                    && myInfo.physics.canJump
+                    && myInfo.physics.multiJumps > 1)
+                {
+                    // Only reset forces / trigger the extra jump if we still have jumps left
+                    if (myPhysicsScript.currentAirJumps < myInfo.physics.multiJumps)
+                    {
+                        bool holdForward = inputHeldDown[ButtonPress.Forward] > 0;
+                        bool holdBack    = inputHeldDown[ButtonPress.Back] > 0;
+
+                        // Reset any existing forces so the double-jump always uses the intended impulse
+                        if (currentMove == null) {
+                            myPhysicsScript.ResetForces(true, true, true);
+                        }
+
+                        myPhysicsScript.Jump();
+
+                        Fix64 fx = (Fix64)10;
+
+                        if (holdForward && !holdBack)
+                        {
+                            myPhysicsScript.AddForce(new FPVector(-fx * mirror, 0, 0), 1, true);
+                        }
+                        else if (holdBack && !holdForward)
+                        {
+                            myPhysicsScript.AddForce(new FPVector(fx * mirror, 0, 0), 1, true);
+                        }
+                        // neutral: no additional force, preserve current arc
+                    }
+                }
+
+Where, out of the box, UFE's multi jump system basically just repeats the same arc of your first jump for any subsequent jump, necessitating the use of moves for anything related to this. 
+Only issue being that polling related to moving the stick between different versions of up (Up-Back, Up, Up-Forward or 7,8,9 depending on how you want to notate it). 
+This allows for jumping as likely intended
+
+If you want to use this in tandem with Jump Cancels on normals, you can make the Jump Cancel a move that uses a gauge, and then also gate the Multi Jump code with the same gauge so that you don't get extra jumps from doing a combo
+
+Currently for my game I intend on making Jump Arcs universal, so I plan on leaving it as is, but you should be able to add fields to the physicsScript of each character and then wire them pretty easily into this
